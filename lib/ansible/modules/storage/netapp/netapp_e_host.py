@@ -325,13 +325,12 @@ class Host(object):
 
     def update_host(self):
         if self.ports:
-            if self.hostports_available:
-                if self.force_port_update is True:
-                    self.reassign_ports(apply=False)
-                    # Make sure that only ports that arent being reassigned are passed into the ports attr
-                    self.ports = [port for port in self.ports if not self.port_on_diff_host(port)]
+            if self.force_port_update is True:
+                self.reassign_ports(apply=False)
+                # Make sure that only ports that arent being reassigned are passed into the ports attr
+                self.ports = [port for port in self.ports if not self.port_on_diff_host(port)]
 
-                self.post_body['ports'] = self.ports
+            self.post_body['ports'] = self.ports
 
         if self.group:
             self.post_body['groupId'] = self.group_id
