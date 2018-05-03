@@ -22,18 +22,30 @@ author: Michael Price (@lmprice)
 extends_documentation_fragment:
     - netapp.eseries
 options:
+    controller:
+        description:
+            - The controller that owns the port you want to configure.
+            - Controller names are represented alphabetically, with the first controller as A,
+             the second as B, and so on.
+            - Current hardware models have either 1 or 2 available controllers, but that is not a guaranteed hard
+             limitation and could change in the future.
+        required: yes
+        choices:
+            - A
+            - B
     name:
         description:
             - The name of the port to modify the configuration of.
-            - The list of choices is not necessarily comprehensive. It depends on the number of ports and number of
-             controllers that are present in the system.
-            - The numerical value represents the interface number, the letter the controller.
+            - The list of choices is not necessarily comprehensive. It depends on the number of ports 
+            that are present in the system.
+            - The numerical value represents the interface number. Typically the base ports on the controller
+             are the lowest numbered ports.
+            - Required when I(ipv4) is provided.
         choices:
-            - 0a
-            - 1a
-            - 0b
-            - 1b
-        required: True
+            - 0
+            - 1
+            - 2
+            - 3
     ssh_enable:
         type: boolean
         description:
@@ -84,7 +96,8 @@ notes:
 EXAMPLES = """
     - name: Configure the first port on the A controller
       netapp_e_mgmt_interface:
-        name: "0a"
+        controller: "A"
+        name: "0"
         ipv4:
             config_method: static
             address: "192.168.1.100"
@@ -97,7 +110,8 @@ EXAMPLES = """
 
     - name: Disable ipv4 connectivity for the second port on the B controller
       netapp_e_mgmt_interface:
-        name: "1b"
+        controller: "B"
+        name: "1"
         ipv4:
             state: absent
         ssid: "{{ ssid }}"
@@ -134,14 +148,23 @@ class MgmtInterface(object):
     def __init__(self):
         argument_spec = eseries_host_argument_spec()
         argument_spec.update(dict(
-            name=dict(type='str', required=True),
+            controller=dict(type='str', required=True, choices=['A', 'B', 'a', 'b']),
+            name=dict(type='str', required=False),
+            ssh_enable=dict(type='bool', required=False),
             ipv4=dict(type='dict', required=False),
         ))
 
-        self.module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=True)
+        required_together = [
+            ['name', 'ipv4']
+        ]
+
+        self.module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=True,
+                                    required_together=required_together)
         args = self.module.params
+        self.controller = args['controller'].upper()
         self.name = args['name']
         self.ipv4_config = args['ipv4']
+        self.ssh_enable = args['ssh_enable']
 
         self.ssid = args['ssid']
         self.url = args['api_url']
