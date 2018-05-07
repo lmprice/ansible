@@ -1,0 +1,107 @@
+pipeline {
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
+    }
+    agent any
+    stages {
+        stage('Setup'){
+            steps{
+                echo 'Clearing any existing coverage reports'
+                sh '''
+                    . hacking/env-setup -q
+                    ansible-test coverage erase
+                '''
+            }
+        }
+        stage('Static-Analysis') {
+            parallel {
+                stage('Compile') {
+                    steps{
+                        sh '''
+                            . hacking/env-setup -q
+                            ansible-test sanity --test compile --junit --docker
+                        '''
+                    }
+                }
+                stage('pep8') {
+                  steps{
+                      sh '''
+                          . hacking/env-setup -q
+                          ansible-test sanity --test pep8 --junit --docker
+                      '''
+                  }
+                }
+                stage('pylint') {
+                  steps{
+                      sh '''
+                          . hacking/env-setup -q
+                          ansible-test sanity --test pylint --junit --docker
+                      '''
+                  }
+                }
+                stage('yamllint') {
+                  steps{
+                      sh '''
+                          . hacking/env-setup -q
+                          ansible-test sanity --test yamllint --junit --docker
+                      '''
+                  }
+                }
+                stage('ansible-doc') {
+                  steps{
+                      sh '''
+                          . hacking/env-setup -q
+                          ansible-test sanity --test ansible-doc --junit --docker
+                      '''
+                  }
+                }
+                stage('Misc') {
+                  steps{
+                      sh '''
+                          . hacking/env-setup -q
+                          ansible-test sanity --test shebang --junit --docker
+                          ansible-test sanity --test validate-modules --junit --docker
+                      '''
+                  }
+                }
+            }
+        }
+        stage('Test') {
+            parallel {
+                stage('Unit-Test') {
+                    steps {
+                        sh'''
+                            . hacking/env-setup -q
+                            ansible-test units .*netapp_e.* --coverage --docker
+                        '''
+                    }
+                }
+                stage('Integration-Test') {
+                    steps {
+                        sh '''
+                            . hacking/env-setup -q
+                            cp /home/lorenp/integration_config.yml test/integration/integration_config.yml
+                            ansible-test integration --allow-unsupported netapp/eseries/* -v --coverage --docker
+                        '''
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            archive "test/results/junit/**/*"
+            junit 'test/results/junit/*.xml'
+            sh '''
+                . hacking/env-setup -q
+                ansible-test coverage combine
+                ansible-test coverage xml
+            '''
+            cobertura autoUpdateHealth: false, autoUpdateStability: false,
+             coberturaReportFile: 'test/results/reports/coverage.xml', conditionalCoverageTargets: '70, 0, 0',
+             failUnhealthy: false, failUnstable: false, lineCoverageTargets: '80, 0, 0', maxNumberOfBuilds: 0,
+             methodCoverageTargets: '80, 0, 0', onlyStable: true, sourceEncoding: 'ASCII', zoomCoverageChart: true
+
+        }
+    }
+}
