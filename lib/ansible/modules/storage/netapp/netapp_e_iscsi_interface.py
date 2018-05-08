@@ -116,7 +116,7 @@ EXAMPLES = """
         api_url: "{{ netapp_api_url }}"
         api_username: "{{ netapp_api_username }}"
         api_password: "{{ netapp_api_password }}"
-    
+
     - name: Enable jumbo frames for the first 4 ports on controller A
       netapp_e_iscsi_interface:
         name: "{{ item | int }}"
@@ -128,7 +128,7 @@ EXAMPLES = """
         api_url: "{{ netapp_api_url }}"
         api_username: "{{ netapp_api_username }}"
         api_password: "{{ netapp_api_password }}"
-    loop:
+      loop:
         - 1
         - 2
         - 3
@@ -172,7 +172,7 @@ details:
             returned: always
             sample: 192.168.1.100
         subnet_mask:
-            description: 
+            description:
                 - The currently configured subnet mask for the interface
             returned: always
             sample:
