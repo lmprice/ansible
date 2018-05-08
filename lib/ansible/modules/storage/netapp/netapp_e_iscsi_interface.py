@@ -91,6 +91,8 @@ options:
         required: no
 notes:
     - Check mode is supported.
+    - The interface settings are applied synchronously, but changes to the interface itself (receiving a new IP address
+      via dhcp, etc), can take seconds or minutes longer to take effect.
 """
 
 EXAMPLES = """
@@ -149,42 +151,6 @@ enabled:
     returned: on success
     sample: True
     type: bool
-details:
-    description:
-        - Provide details on the current configuration of the interface.
-        - It is possible for this value to still be updating in cases where config_method has just been set to dhcp. If
-          we have not yet been able to request an address, values in this structure may still be updating.
-    returned: on success
-    type: complex
-    contains:
-        configState:
-            description:
-                - Indicates whether or not the interface has actually been configured and the other data is valid.
-            returned: always
-            sample:
-                - configured
-                - unconfigured
-        address:
-            description:
-                - The currently configured IPv4 address for the interface
-                - It is possible for this value to still be updating in cases where config_method has just been set to dhcp. If
-                  we have not yet been able to request an address, this value may be 0.0.0.0 or some other invalid address.
-            returned: always
-            sample: 192.168.1.100
-        subnet_mask:
-            description:
-                - The currently configured subnet mask for the interface
-            returned: always
-            sample:
-                - 255.255.255.0
-                - 255.255.252.0
-        gateway:
-            description:
-                - The currently configured gateway (router), address.
-            returned: always
-            sample:
-                - 0.0.0.0
-                - 192.168.1.1
 """
 import json
 import logging
@@ -397,22 +363,9 @@ class IscsiInterface(object):
                         % (self.ssid, to_native(err)))
 
         iface_after = self.fetch_target_interface()
-        retry_count = 30
-        retries = 0
-        if self.state == 'present' and not self.check_mode:
-            while (iface_after['ipv4Data']['ipv4AddressData']['configState'] != 'configured' and retries < retry_count):
-                time.sleep(1)
-                iface_after = self.fetch_target_interface()
-                retries += 1
-
-        details = dict(configState=iface_after['ipv4Data']['ipv4AddressData']['configState'],
-                       address=iface_after['ipv4Data']['ipv4AddressData']['ipv4Address'],
-                       subnet_mask=iface_after['ipv4Data']['ipv4AddressData']['ipv4SubnetMask'],
-                       gateway=iface_after['ipv4Data']['ipv4AddressData']['ipv4Address'])
 
         self.module.exit_json(msg="The interface settings have been updated.", changed=update_required,
-                              enabled=iface_after['ipv4Enabled'],
-                              details=details)
+                              enabled=iface_after['ipv4Enabled'])
 
     def __call__(self, *args, **kwargs):
         self.update()
