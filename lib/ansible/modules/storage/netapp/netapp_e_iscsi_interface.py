@@ -189,6 +189,7 @@ details:
 import json
 import logging
 from pprint import pformat
+import time
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.netapp import request, eseries_host_argument_spec
@@ -396,6 +397,13 @@ class IscsiInterface(object):
                         % (self.ssid, to_native(err)))
 
         iface_after = self.fetch_target_interface()
+        retry_count = 30
+        retries = 0
+        if self.state == 'present' and not self.check_mode:
+            while (iface_after['ipv4Data']['ipv4AddressData']['configState'] != 'configured' and retries < retry_count):
+                time.sleep(1)
+                iface_after = self.fetch_target_interface()
+                retries += 1
 
         details = dict(configState=iface_after['ipv4Data']['ipv4AddressData']['configState'],
                        address=iface_after['ipv4Data']['ipv4AddressData']['ipv4Address'],
