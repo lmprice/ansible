@@ -94,41 +94,97 @@ notes:
 """
 
 EXAMPLES = """
-    - name: Configure the first port on the A controller
+    - name: Configure the first port on the A controller with a static IPv4 address
       netapp_e_iscsi_interface:
-        name: "0a"
-        ipv4_config:
-            config_method: static
-            address: "192.168.1.100"
-            subnet_mask: "255.255.255.0"
-            gateway: "192.168.1.1"
-        ssid: "{{ ssid }}"
-        api_url: "{{ netapp_api_url }}"
-        api_username: "{{ netapp_api_username }}"
-        api_password: "{{ netapp_api_password }}"
+        name: "1"
+        controller: "A"
+        config_method: static
+        address: "192.168.1.100"
+        subnet_mask: "255.255.255.0"
+        gateway: "192.168.1.1"
+        ssid: "1"
+        api_url: "10.1.1.1:8443"
+        api_username: "admin"
+        api_password: "myPass"
 
     - name: Disable ipv4 connectivity for the second port on the B controller
       netapp_e_iscsi_interface:
-        name: "1b"
-        ipv4Config:
-            state: absent
+        name: "2"
+        controller: "B"
+        state: absent
         ssid: "{{ ssid }}"
         api_url: "{{ netapp_api_url }}"
         api_username: "{{ netapp_api_username }}"
         api_password: "{{ netapp_api_password }}"
+    
+    - name: Enable jumbo frames for the first 4 ports on controller A
+      netapp_e_iscsi_interface:
+        name: "{{ item | int }}"
+        controller: "A"
+        state: present
+        mtu: 9000
+        config_method: dhcp
+        ssid: "{{ ssid }}"
+        api_url: "{{ netapp_api_url }}"
+        api_username: "{{ netapp_api_username }}"
+        api_password: "{{ netapp_api_password }}"
+    loop:
+        - 1
+        - 2
+        - 3
+        - 4
 """
 
 RETURN = """
 msg:
     description: Success message
-    returned: success
+    returned: on success
     type: string
     sample: The interface settings have been updated.
-ipv4_address:
-    description: The currently configured IPv4 address for the interface
-    returned: on success when ipv4_config.state=present
-    sample: 192.168.1.100
-    type: string
+enabled:
+    description:
+        - Indicates whether IPv4 connectivity has been enabled or disabled.
+        - This does not necessarily indicate connectivity. If dhcp was enabled absent a dhcp server, for instance,
+          it is unlikely that the configuration will actually be valid.
+    returned: on success
+    sample: True
+    type: bool
+details:
+    description:
+        - Provide details on the current configuration of the interface.
+        - It is possible for this value to still be updating in cases where config_method has just been set to dhcp. If
+          we have not yet been able to request an address, values in this structure may still be updating.
+    returned: on success
+    type: complex
+    contains:
+        configState:
+            description:
+                - Indicates whether or not the interface has actually been configured and the other data is valid.
+            returned: always
+            sample:
+                - configured
+                - unconfigured
+        address:
+            description:
+                - The currently configured IPv4 address for the interface
+                - It is possible for this value to still be updating in cases where config_method has just been set to dhcp. If
+                  we have not yet been able to request an address, this value may be 0.0.0.0 or some other invalid address.
+            returned: always
+            sample: 192.168.1.100
+        subnet_mask:
+            description: 
+                - The currently configured subnet mask for the interface
+            returned: always
+            sample:
+                - 255.255.255.0
+                - 255.255.252.0
+        gateway:
+            description:
+                - The currently configured gateway (router), address.
+            returned: always
+            sample:
+                - 0.0.0.0
+                - 192.168.1.1
 """
 import json
 import logging
@@ -340,9 +396,15 @@ class IscsiInterface(object):
                         % (self.ssid, to_native(err)))
 
         iface_after = self.fetch_target_interface()
-        self.module.exit_json(msg="Success", changed=update_required, ipv4_enabled=iface_after['ipv4Enabled'],
-                              ipv4_address=iface_after['ipv4Data']['ipv4AddressData']['ipv4Address'],
-                              state=iface_after['ipv4Data'])
+
+        details = dict(configState=iface_after['ipv4Data']['ipv4AddressData']['configState'],
+                       address=iface_after['ipv4Data']['ipv4AddressData']['ipv4Address'],
+                       subnet_mask=iface_after['ipv4Data']['ipv4AddressData']['ipv4SubnetMask'],
+                       gateway=iface_after['ipv4Data']['ipv4AddressData']['ipv4Address'])
+
+        self.module.exit_json(msg="The interface settings have been updated.", changed=update_required,
+                              enabled=iface_after['ipv4Enabled'],
+                              details=details)
 
     def __call__(self, *args, **kwargs):
         self.update()
